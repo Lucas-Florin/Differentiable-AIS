@@ -56,7 +56,7 @@ np.random.seed(args.seed)
 
 if args.cuda:
     torch.cuda.manual_seed_all(args.seed)
-
+    
 device = torch.device("cuda" if args.cuda else "cpu")
 
 def _init_fn(worker_id):
@@ -217,7 +217,7 @@ def eval(model, logger):
 
         batch_time = time.time() - end
         end = time.time()
-        logger.info('[{}/{}] Batch: {:.3f}s \tELBO: {:.6f}'.format(batch_idx * len(data),
+        logger.info('[{}/{}] Batch: {:.3f}s \tELBO: {:.6f}'.format(batch_idx * args.batch_size + len(data),
             len(test_loader.dataset), batch_time, elbo.item() / len(data)))
 
 

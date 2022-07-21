@@ -237,9 +237,10 @@ class VAE(nn.Module):
         return elbo.sum(), recon_x
 
 
-def train(model, optimizer, epoch, logger):
+def train(model: VAE, optimizer, epoch, logger):
     model.train()
     train_loss = 0
+    num_batches = len((train_loader))
     for batch_idx, (data, _) in enumerate(train_loader):
         data = data.to(device)
         optimizer.zero_grad()
@@ -259,9 +260,9 @@ def train(model, optimizer, epoch, logger):
         optimizer.step()
         if args.block_grad:
             model.sync()
-        if batch_idx % args.log_interval == 0:
+        if batch_idx+1 % args.log_interval == 0 or batch_idx+1 == num_batches:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
+                epoch, batch_idx * args.batch_size + len(data), len(train_loader.dataset),
                 100. * batch_idx / len(train_loader),
                 loss.item() / len(data)))
 
