@@ -109,12 +109,12 @@ class Network(nn.Module):
         self.fc6 = nn.Linear(hidden_units, 784)
 
     def encode(self, x):
-        h1 = F.tanh(self.fc2(F.tanh(self.fc1(x))))
-        # h1 = F.tanh(self.fc1(x))
+        h1 = torch.tanh(self.fc2(torch.tanh(self.fc1(x))))
+        # h1 = torch.tanh(self.fc1(x))
         return self.fc31(h1), self.fc32(h1)
 
     def decode(self, z):
-        h3 = F.tanh(self.fc5(F.tanh(self.fc4(z))))
+        h3 = torch.tanh(self.fc5(torch.tanh(self.fc4(z))))
         return self.fc6(h3)
 
 
