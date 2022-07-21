@@ -10,7 +10,7 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/
+# dist/
 downloads/
 eggs/
 .eggs/
@@ -131,3 +131,7 @@ dmypy.json
 #
 .DS_Store
 ._.DS_Store
+
+# Project
+results/
+.vscode/
