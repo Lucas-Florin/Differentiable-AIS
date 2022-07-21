@@ -47,14 +47,15 @@ parser.add_argument('--obs_var', type=float, default=0.01,
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--resume', type=str, default=None)
+parser.add_argument('--seed', type=int, default=2019)
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
-torch.manual_seed(2019)
-np.random.seed(2019)
+torch.manual_seed(args.seed)
+np.random.seed(args.seed)
 
 if args.cuda:
-    torch.cuda.manual_seed_all(2019)
+    torch.cuda.manual_seed_all(args.seed)
 
 device = torch.device("cuda" if args.cuda else "cpu")
 
