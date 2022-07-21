@@ -54,6 +54,7 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
 parser.add_argument('--log-interval', type=int, default=100,
                     help='how many batches to wait before logging training status')
 parser.add_argument('--ckpt-dir', type=str, default=None)
+parser.add_argument('--save-checkpoint', action='store_true', default=False)
 parser.add_argument('--seed', type=int, default=2019)
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -126,12 +127,12 @@ class Network(nn.Module):
         self.fc6 = nn.Linear(hidden_units, 784)
 
     def encode(self, x):
-        h1 = F.tanh(self.fc2(F.tanh(self.fc1(x))))
-        # h1 = F.tanh(self.fc1(x))
+        h1 = torch.tanh(self.fc2(torch.tanh(self.fc1(x))))
+        # h1 = torch.tanh(self.fc1(x))
         return self.fc31(h1), self.fc32(h1)
 
     def decode(self, z):
-        h3 = F.tanh(self.fc5(F.tanh(self.fc4(z))))
+        h3 = torch.tanh(self.fc5(torch.tanh(self.fc4(z))))
         return self.fc6(h3)
 
 
@@ -322,11 +323,11 @@ def main():
         test(model, optimizer, epoch, logger, save_dir)
         scheduler.step()
 
-        if args.ckpt_dir is not None:
+        if args.save_checkpoint:
             checkpoint_name = checkpoint_save({'state_dict': model.state_dict(), 
                 'optimizer': optimizer.state_dict(), 
                 'scheduler': scheduler.state_dict(),
-                'epoch': epoch+1}, args.ckpt_dir)
+                'epoch': epoch+1}, save_dir)
 
         if args.lf_step > 0 and args.adapt_beta:
             betas = torch.cumsum(F.softmax(model.beta_logits, dim=0), dim=0)
