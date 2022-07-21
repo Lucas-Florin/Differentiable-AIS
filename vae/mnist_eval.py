@@ -71,7 +71,7 @@ def init_logger():
     save_dir = args.resume[:-13]
     print(save_dir)
     if not os.path.isdir(save_dir):
-        raise NotFoundError
+        raise FileNotFoundError
 
     # set logger
     path = os.path.dirname(os.path.abspath(__file__))
