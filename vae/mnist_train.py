@@ -49,6 +49,8 @@ parser.add_argument('--obs_var', type=float, default=0.01,
                     help='observartion variance for Gaussian model.')
 parser.add_argument('--vae', action='store_true', default=False,
                     help='use VAE ELBO even with multiple particles')
+parser.add_argument('--iwae', action='store_true', default=False,
+                    help='use use importance weighting for VAE (IWAE)')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--log-interval', type=int, default=100,
@@ -194,7 +196,11 @@ class VAE(nn.Module):
             NLLD = torch.sum(F.binary_cross_entropy_with_logits(recon_x_logits, x.view(-1, 784), reduction='none'), 1)
         KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), 1)
         elbo = - NLLD - KLD
-        elbo = elbo.view(k, -1).transpose(0, 1).mean(1)
+        elbo = elbo.view(k, -1)
+        if args.iwae:
+            weights = F.softmax(elbo, 0)
+            elbo *= weights
+        elbo = elbo.transpose(0, 1).mean(1)
         return elbo.sum(), recon_x
 
     def tighter_elbo(self, x, n_steps, step_size=0.05, partial=True, gamma=0.9, k=1, block_grad=False, is_train=True):
