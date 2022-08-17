@@ -38,6 +38,8 @@ parser.add_argument('--ais', action='store_true',
                     help='whether to use annealed importance sampling')
 parser.add_argument('--hais', action='store_true',
                     help='whether to use hamiltonian annealed importance sampling')
+parser.add_argument('--iwae', action='store_true',
+                    help='use use importance weighting for VAE (IWAE)')
 parser.add_argument('--init_prior', action='store_true',
                     help='whether to ignore the encoder')
 parser.add_argument('--gaussian', action='store_true', default=False,
@@ -142,7 +144,7 @@ class VAE(nn.Module):
     #     h3 = F.tanh(self.fc5(F.tanh(self.fc4(z))))
     #     return self.fc6(h3)
 
-    def encode(self, x):
+    def encode(self, x: torch.Tensor) -> torch.Tensor:
         return self.net.encode(x)
 
     def decode(self, z):
@@ -157,6 +159,30 @@ class VAE(nn.Module):
         mu, logvar = self.encode(x.view(-1, 784))
         z = self.reparameterize(mu, logvar)
         return self.decode(z), mu, logvar
+
+
+    def elbo(self, x: torch.Tensor, k=1) -> torch.Tensor:
+        mu, logvar = self.encode(x.view(-1, 784))
+        mu, logvar, x = mu.repeat(k, 1), logvar.repeat(k, 1), x.repeat(k, 1, 1, 1)
+        z = self.reparameterize(mu, logvar)
+        recon_x_logits = self.decode(z)
+        recon_x = torch.sigmoid(recon_x_logits)
+        if args.gaussian:
+            NLLD = torch.sum(
+                0.5 * F.mse_loss(torch.sigmoid(recon_x_logits), x.view(-1, 784), reduction='none') / args.obs_var 
+                + 0.5 * math.log(2 * math.pi) + 0.5 * math.log(args.obs_var), 1)
+        else:
+            NLLD = torch.sum(F.binary_cross_entropy_with_logits(recon_x_logits, x.view(-1, 784), reduction='none'), 1)
+        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), 1)
+        elbo = - NLLD - KLD
+        elbo = elbo.view(k, -1)
+        if args.iwae:
+            weights = F.softmax(elbo.detach(), 0)
+            elbo *= weights
+            elbo = elbo.transpose(0, 1).sum(1)
+        else:
+            elbo = elbo.transpose(0, 1).mean(1)
+        return elbo.sum()
 
     def tighter_elbo(self, x, n_steps, step_size=0.05, partial=True, 
         gamma=0.9, k=1, init_prior=False, ais=False, hais=False):
@@ -204,15 +230,18 @@ class VAE(nn.Module):
         return elbo.sum()
 
 
-def eval(model, logger):
+def eval(model: VAE, logger):
     model.eval()
     test_loss = 0
     end = time.time()
     for batch_idx, (data, _) in enumerate(test_loader):
         data = data.to(device)
-        elbo = model.tighter_elbo(data, n_steps=args.lf_step, step_size=args.lf_lrate, 
-            gamma=args.gamma, k=args.n_particles, 
-            init_prior=args.init_prior, ais=args.ais, hais=args.hais)
+        if args.iwae:
+            elbo = model.elbo(data, k=args.n_particles)
+        else:
+            elbo = model.tighter_elbo(data, n_steps=args.lf_step, step_size=args.lf_lrate, 
+                gamma=args.gamma, k=args.n_particles, 
+                init_prior=args.init_prior, ais=args.ais, hais=args.hais)
         test_loss -= elbo.item()
 
         batch_time = time.time() - end
