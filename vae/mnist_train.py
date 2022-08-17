@@ -87,8 +87,10 @@ def init_logger():
         args.lrate, args.hdim, args.zdim)
     if args.vae:
         folder_name += '_vae%d' % args.n_particles
-    else:
+    elif args.iwae:
         folder_name += '_iwae%d' % args.n_particles
+    else:
+        folder_name += '_particles%d' % args.n_particles
 
         if args.lf_step > 0:
             folder_name += '_lfs%d_lr%.3f_gamma%.2f' % (args.lf_step, 
@@ -198,9 +200,11 @@ class VAE(nn.Module):
         elbo = - NLLD - KLD
         elbo = elbo.view(k, -1)
         if args.iwae:
-            weights = F.softmax(elbo, 0)
+            weights = F.softmax(elbo.detach(), 0)
             elbo *= weights
-        elbo = elbo.transpose(0, 1).mean(1)
+            elbo = elbo.transpose(0, 1).sum(1)
+        else:
+            elbo = elbo.transpose(0, 1).mean(1)
         return elbo.sum(), recon_x
 
     def tighter_elbo(self, x, n_steps, step_size=0.05, partial=True, gamma=0.9, k=1, block_grad=False, is_train=True):
@@ -251,7 +255,7 @@ def train(model: VAE, optimizer, epoch, logger):
     for batch_idx, (data, _) in enumerate(train_loader):
         data = data.to(device)
         optimizer.zero_grad()
-        if args.vae:
+        if args.vae or args.iwae:
             elbo, _ = model.elbo(data, k=args.n_particles)
         else:
             elbo, _ = model.tighter_elbo(data, args.lf_step, args.lf_lrate, 
