@@ -51,10 +51,14 @@ parser.add_argument('--vae', action='store_true', default=False,
                     help='use VAE ELBO even with multiple particles')
 parser.add_argument('--iwae', action='store_true', default=False,
                     help='use use importance weighting for VAE (IWAE)')
+parser.add_argument('--no_kld', action='store_true', default=False,
+                    help='use proposal distribution probability instead of KLD')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--log-interval', type=int, default=100,
                     help='how many batches to wait before logging training status')
+parser.add_argument('--no_log', action='store_true', default=False,
+                    help='do not write log to file')
 parser.add_argument('--ckpt-dir', type=str, default=None)
 parser.add_argument('--save-checkpoint', action='store_true', default=False)
 parser.add_argument('--seed', type=int, default=2019)
@@ -109,7 +113,7 @@ def init_logger():
     # set logger
     path = os.path.dirname(os.path.abspath(__file__))
     path_main = os.path.join(path, 'mnist_train.py')
-    logger = get_logger('log', logpath=save_dir+'/', filepath=path_main)
+    logger = get_logger('log', logpath=save_dir+'/', filepath=path_main, saving=not args.no_log)
     logger.info(args)
     return save_dir, logger
 
@@ -186,6 +190,7 @@ class VAE(nn.Module):
 
     def elbo(self, x, k=1):
         mu, logvar = self.encode(x.view(-1, 784))
+        assert not mu.isnan().any()
         mu, logvar, x = mu.repeat(k, 1), logvar.repeat(k, 1), x.repeat(k, 1, 1, 1)
         z = self.reparameterize(mu, logvar)
         recon_x_logits = self.decode(z)
@@ -196,8 +201,16 @@ class VAE(nn.Module):
                 + 0.5 * math.log(2 * math.pi) + 0.5 * math.log(args.obs_var), 1)
         else:
             NLLD = torch.sum(F.binary_cross_entropy_with_logits(recon_x_logits, x.view(-1, 784), reduction='none'), 1)
-        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), 1)
-        elbo = - NLLD - KLD
+        if not args.no_kld:
+            KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), 1)
+            elbo = - NLLD - KLD
+        else:
+            std = torch.exp(logvar * 0.5)
+            assert not std.isnan().any() and not torch.any(std == 0)
+            proposal_prob = torch.distributions.Normal(mu, std).log_prob(z).sum(-1)
+            assert not proposal_prob.isnan().any() and not torch.any(proposal_prob == 0)
+            prior = torch.distributions.Normal(0, 1).log_prob(z).sum(-1)
+            elbo = - NLLD - proposal_prob + prior
         elbo = elbo.view(k, -1)
         if args.iwae:
             weights = F.softmax(elbo.detach(), 0)
